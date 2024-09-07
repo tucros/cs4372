@@ -13,39 +13,46 @@ from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings(action="ignore", category=ConvergenceWarning)
 
+columns = [
+    "mpg",
+    "cylinders",
+    "displacement",
+    "horsepower",
+    "weight",
+    "acceleration",
+    "model year",
+    "origin",
+    "car name",
+]
 
-# Importing the dataset
+numerical_columns = [
+    "mpg",
+    "horsepower",
+    "weight",
+    "acceleration",
+    "displacement",
+]
+
+
 def load_data():
-    columns = [
-        "mpg",
-        "cylinders",
-        "displacement",
-        "horsepower",
-        "weight",
-        "acceleration",
-        "model year",
-        "origin",
-        "car name",
-    ]
     url = "https://github.com/williamphyoe/datasets/blob/main/auto-mpg.csv?raw=true"
     df = pd.read_csv(url, header=None, names=columns, sep="\s+")
-
     return df
 
 
 def generate_exploration_plots(df):
     plt.figure(figsize=(20, 20))
 
-    # Pairplot for numerical columns
-    numerical_columns = df.select_dtypes(include=[np.number]).columns
+    # Pairplot numerical columns
     sns.pairplot(df[numerical_columns], diag_kind="kde")
     plt.suptitle("Pairplot of Numerical Variables", y=1.02)
     plt.show()
 
     # Boxplots for each numerical variable
     plt.figure(figsize=(15, 10))
-    for i, column in enumerate(numerical_columns, 1):
-        plt.subplot(3, 3, i)
+    for idx, column in enumerate(numerical_columns, 1):
+        print(f"Boxplot of {column}")
+        plt.subplot(3, 3, idx)
         sns.boxplot(x=df[column])
         plt.title(f"Boxplot of {column}")
     plt.tight_layout()
@@ -57,13 +64,19 @@ def generate_exploration_plots(df):
     plt.title("Correlation Heatmap")
     plt.show()
 
-    # Countplot for 'origin' (categorical variable)
-    plt.figure(figsize=(10, 6))
-    sns.countplot(x="origin", data=df)
-    plt.title("Count of Cars by Origin")
+    # barplot of cyclinders
+    plt.figure(figsize=(12, 8))
+    sns.countplot(x="cylinders", data=df)
+    plt.title("Count of Cylinders")
     plt.show()
 
-    # Scatterplot of MPG vs Weight, with color based on Origin
+    # barplot of origin
+    plt.figure(figsize=(12, 8))
+    sns.countplot(x="origin", data=df)
+    plt.title("Count of Origin")
+    plt.show()
+
+    # Scatterplot of MPG vs Horsepower, with color based on cylinders
     plt.figure(figsize=(12, 8))
     sns.scatterplot(x="weight", y="mpg", hue="origin", data=df)
     plt.title("MPG vs Weight, colored by Origin")
@@ -196,10 +209,10 @@ def ols_model(X, y):
 
 if __name__ == "__main__":
     df = load_data()
-    # generate_exploration_plots(df)
 
-    # Preprocess data
-    df = df.pipe(clean_data).pipe(feature_eng)
+    df = clean_data(df)
+    generate_exploration_plots(df)
+    df = feature_eng(df)
 
     # Split data into training and test sets
     X = df.drop("mpg", axis=1)
@@ -211,4 +224,5 @@ if __name__ == "__main__":
 
     # X = pd.concat([X_train, X_test])
     # y = pd.concat([y_train, y_test])
+    # ols_model(X, y)
     ols_model(X_train, y_train)
