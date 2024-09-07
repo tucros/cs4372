@@ -30,10 +30,6 @@ def load_data():
     url = "https://github.com/williamphyoe/datasets/blob/main/auto-mpg.csv?raw=true"
     df = pd.read_csv(url, header=None, names=columns, sep="\s+")
 
-    # Drop unused columns and add bias
-    df = df.drop(["car name", "model year"], axis=1)
-    df["bias"] = 1
-
     return df
 
 
@@ -90,6 +86,11 @@ def clean_data(df):
     df["horsepower"] = df["horsepower"].astype(float)
     df["origin"] = pd.Categorical(df["origin"])
     df["cylinders"] = pd.Categorical(df["cylinders"])
+
+    # Drop unused columns and add bias
+    df = df.drop(["car name", "model year"], axis=1)
+    df["bias"] = 1
+
     return df
 
 
@@ -110,10 +111,9 @@ def feature_analysis(df):
 def feature_eng(df):
     feature_analysis(df)
 
-    # Drop columns with high correlation and p-value
+    # Drop columns with high correlation and/or p-value
     df = df.drop(["displacement"], axis=1)
 
-    # print(df)
     feature_analysis(df)
     return df
 
@@ -174,23 +174,6 @@ def sgd_model(X_train, X_test, y_train, y_test):
     results.to_excel("sgd_results.xlsx")
 
 
-def ols_model(X_train, y_train):
-    model = sm.OLS(y_train, X_train).fit()
-
-    print("\nOLS Summary:")
-    print(model.summary())
-
-    print(f"R-squared: {model.rsquared:.4f}")
-    print(f"Adj R-squared: {model.rsquared_adj:.4f}")
-    print(f"F-value: {model.fvalue:.4f}")
-    print(f"F-pvalue: {model.f_pvalue:.4f}")
-
-    for name, coef, std_err, p_value in zip(
-        model.model.exog_names, model.params, model.bse, model.pvalues
-    ):
-        print(f"{name}: {coef:.4f} ({std_err:.4f}, {p_value:.4f})")
-
-
 if __name__ == "__main__":
     df = load_data()
     # generate_exploration_plots(df)
@@ -205,4 +188,10 @@ if __name__ == "__main__":
 
     # Train and evaluate models
     sgd_model(X_train, X_test, y_train, y_test)
-    ols_model(X_train, y_train)
+
+    # X = pd.concat([X_train, X_test])
+    # y = pd.concat([y_train, y_test])
+    # ols_model(X, y)
+    model = sm.OLS(y_train, X_train).fit()
+    print("\nOLS Summary:")
+    print(model.summary())
