@@ -174,6 +174,26 @@ def sgd_model(X_train, X_test, y_train, y_test):
     results.to_excel("sgd_results.xlsx")
 
 
+def ols_model(X, y):
+    model = sm.OLS(y, X).fit()
+    print("\nOLS Summary:")
+    print(model.summary())
+
+    y_train_pred = model.predict(X_train)
+    y_test_pred = model.predict(X_test)
+
+    train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
+    test_rmse = np.sqrt(mean_squared_error(y_test, y_test_pred))
+    train_r2 = r2_score(y_train, y_train_pred)
+    test_r2 = r2_score(y_test, y_test_pred)
+
+    print("OLS Results:")
+    print(f"Training RMSE: {train_rmse:.4f}")
+    print(f"Test RMSE: {test_rmse:.4f}")
+    print(f"Training R2: {train_r2:.4f}")
+    print(f"Test R2: {test_r2:.4f}")
+
+
 if __name__ == "__main__":
     df = load_data()
     # generate_exploration_plots(df)
@@ -191,7 +211,4 @@ if __name__ == "__main__":
 
     # X = pd.concat([X_train, X_test])
     # y = pd.concat([y_train, y_test])
-    # ols_model(X, y)
-    model = sm.OLS(y_train, X_train).fit()
-    print("\nOLS Summary:")
-    print(model.summary())
+    ols_model(X_train, y_train)
