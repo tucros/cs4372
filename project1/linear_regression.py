@@ -1,12 +1,17 @@
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import SGDRegressor
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.preprocessing import StandardScaler
+
+warnings.filterwarnings(action="ignore", category=ConvergenceWarning)
 
 
 # Importing the dataset
@@ -84,6 +89,7 @@ def clean_data(df):
 
     df["horsepower"] = df["horsepower"].astype(float)
     df["origin"] = pd.Categorical(df["origin"])
+    df["cylinders"] = pd.Categorical(df["cylinders"])
     return df
 
 
@@ -113,43 +119,44 @@ def feature_eng(df):
 
 
 def sgd_model(X_train, X_test, y_train, y_test):
-    # Standardize the features
+    X_train_scaled = X_train.copy()
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    numeric_columns = ["horsepower", "weight", "acceleration"]
+    X_train_scaled[numeric_columns] = scaler.fit_transform(
+        X_train_scaled[numeric_columns]
+    )
 
-    # Define hyperparameters to tune
+    X_test_scaled = X_test.copy()
+    X_test_scaled[numeric_columns] = scaler.transform(X_test_scaled[numeric_columns])
+
+    # One-hot encode 'origin' and 'cylinders'
+    X_train_scaled = pd.get_dummies(
+        X_train_scaled, columns=["origin", "cylinders"], drop_first=True
+    )
+    X_test_scaled = pd.get_dummies(
+        X_test_scaled, columns=["origin", "cylinders"], drop_first=True
+    )
+
     param_grid = {
         "alpha": [0.0001, 0.001, 0.01, 0.1],
         "learning_rate": ["constant", "optimal", "invscaling", "adaptive"],
+        # "eta0": [0.001, 0.005, 0.01, 0.05, 0.1],
         "loss": ["squared_error", "huber", "epsilon_insensitive"],
-        "penalty": ["l2", "l1", "elasticnet"],
+        # "penalty": ["l2", "l1", "elasticnet"],
         "max_iter": [1000, 2000, 5000],
+        "tol": [1e-3, 1e-4, 1e-5],
     }
+    print(f"Number of combinations: {np.prod([len(v) for v in param_grid.values()])}")
 
-    # Define scoring metrics
-    scoring = {"r2": "r2", "neg_root_mean_squared_error": "neg_root_mean_squared_error"}
-
-    # Perform grid search
-    sgd = SGDRegressor(random_state=42)
-    grid_search = GridSearchCV(
-        sgd,
-        param_grid,
-        cv=5,
-        scoring=scoring,
-        refit="neg_root_mean_squared_error",
-        return_train_score=True,
-    )
+    print("\nRunning GridSearchCV...")
+    sgd = SGDRegressor()
+    grid_search = GridSearchCV(sgd, param_grid, return_train_score=True)  # , verbose=2)
     grid_search.fit(X_train_scaled, y_train)
 
-    # Get best model
     best_sgd = grid_search.best_estimator_
-
-    # Make predictions
     y_train_pred = best_sgd.predict(X_train_scaled)
     y_test_pred = best_sgd.predict(X_test_scaled)
 
-    # Calculate metrics
     train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
     test_rmse = np.sqrt(mean_squared_error(y_test, y_test_pred))
     train_r2 = r2_score(y_train, y_train_pred)
@@ -162,12 +169,9 @@ def sgd_model(X_train, X_test, y_train, y_test):
     print(f"Training R2: {train_r2:.4f}")
     print(f"Test R2: {test_r2:.4f}")
 
-    # Create a DataFrame with all parameter combinations and their scores
     results = pd.DataFrame(grid_search.cv_results_)
-
-    # Convert negative RMSE to positive RMSE
-    results["mean_test_rmse"] = -results["mean_test_neg_root_mean_squared_error"]
-    results["mean_train_rmse"] = -results["mean_train_neg_root_mean_squared_error"]
+    results.sort_values("mean_test_score", ascending=False, inplace=True)
+    results.to_excel("sgd_results.xlsx")
 
 
 def ols_model(X_train, y_train):
@@ -176,15 +180,15 @@ def ols_model(X_train, y_train):
     print("\nOLS Summary:")
     print(model.summary())
 
-    # model.rsquared
-    # model.rsquared_adj
+    print(f"R-squared: {model.rsquared:.4f}")
+    print(f"Adj R-squared: {model.rsquared_adj:.4f}")
+    print(f"F-value: {model.fvalue:.4f}")
+    print(f"F-pvalue: {model.f_pvalue:.4f}")
 
-    # model.fvalue
-    # model.f_pvalue)
-
-    # for name, coef, std_err, p_value in zip(
-    #    model.model.exog_names, model.params, model.bse, model.pvalues
-    # ):
+    for name, coef, std_err, p_value in zip(
+        model.model.exog_names, model.params, model.bse, model.pvalues
+    ):
+        print(f"{name}: {coef:.4f} ({std_err:.4f}, {p_value:.4f})")
 
 
 if __name__ == "__main__":
