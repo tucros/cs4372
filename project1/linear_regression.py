@@ -171,52 +171,20 @@ def sgd_model(X_train, X_test, y_train, y_test):
 
 
 def ols_model(X_train, y_train):
-    # Add constant term to the features
-    X_train_sm = sm.add_constant(X_train)
+    model = sm.OLS(y_train, X_train).fit()
 
-    # Fit OLS model
-    model = sm.OLS(y_train, X_train_sm).fit()
-
-    # Print summary
-    print("\nOLS Model Summary:")
+    print("\nOLS Summary:")
     print(model.summary())
 
-    # Interpret results
-    print("\nOLS Model Interpretation:")
-    print("1. R-squared:", model.rsquared)
-    print(
-        "   - This indicates that {:.2f}% of the variance in MPG is explained by our model.".format(
-            model.rsquared * 100
-        )
-    )
+    # model.rsquared
+    # model.rsquared_adj
 
-    print("\n2. Adjusted R-squared:", model.rsquared_adj)
-    print(
-        "   - This adjusted value accounts for the number of predictors in the model."
-    )
+    # model.fvalue
+    # model.f_pvalue)
 
-    print("\n3. F-statistic:", model.fvalue)
-    print("   - The F-statistic tests the overall significance of the model.")
-    print("   - P-value for F-statistic:", model.f_pvalue)
-    print(
-        "   - A very low p-value suggests that the model is statistically significant."
-    )
-
-    print("\n4. Coefficients:")
-    for name, coef, std_err, p_value in zip(
-        model.model.exog_names, model.params, model.bse, model.pvalues
-    ):
-        print(f"   - {name}:")
-        print(f"     Coefficient: {coef:.4f}")
-        print(f"     Std. Error: {std_err:.4f}")
-        print(f"     P-value: {p_value:.4f}")
-        if p_value < 0.05:
-            print("     This variable is statistically significant at the 5% level.")
-        else:
-            print(
-                "     This variable is not statistically significant at the 5% level."
-            )
-        print()
+    # for name, coef, std_err, p_value in zip(
+    #    model.model.exog_names, model.params, model.bse, model.pvalues
+    # ):
 
 
 if __name__ == "__main__":
