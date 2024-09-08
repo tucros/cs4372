@@ -98,6 +98,7 @@ def vifs(X):
 
 def ols_run_all(X, y):
     columns = list(X.columns)
+    columns.remove("bias")
     combination_iter = chain.from_iterable(
         combinations(columns, i) for i in range(len(columns) + 1)
     )
@@ -105,6 +106,7 @@ def ols_run_all(X, y):
     all_runs = []
     for combination in combination_iter:
         features = list(combination)
+        features.append("bias")
         if len(combination) > 0:
             model = sm.OLS(y, X[features]).fit()
             all_runs.append((features, model.rsquared_adj))
@@ -125,7 +127,7 @@ def feature_eng(df, use_ols=True):
         ols_run_all(X, y)
     vifs(X)
 
-    df = df.drop(["displacement", "bias"], axis=1)
+    df = df.drop(["displacement"], axis=1)
 
     X = df.drop("mpg", axis=1)
     vifs(X)
@@ -163,27 +165,35 @@ def sgd_model(X_train, X_test, y_train, y_test):
     print(f"\nNumber of combinations: {np.prod([len(v) for v in param_grid.values()])}")
     print("Running GridSearchCV...")
     sgd = SGDRegressor()
-    grid_search = GridSearchCV(sgd, param_grid, return_train_score=True)  # , verbose=2)
+    grid_search = GridSearchCV(
+        sgd,
+        param_grid,
+        return_train_score=True,
+        scoring=["neg_mean_squared_error", "r2"],
+        refit="r2",
+        n_jobs=-1,
+    )  # , verbose=2)
     grid_search.fit(X_train_scaled, y_train)
 
-    best_sgd = grid_search.best_estimator_
-    y_train_pred = best_sgd.predict(X_train_scaled)
-    y_test_pred = best_sgd.predict(X_test_scaled)
-
-    train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
-    test_rmse = np.sqrt(mean_squared_error(y_test, y_test_pred))
-    train_r2 = r2_score(y_train, y_train_pred)
-    test_r2 = r2_score(y_test, y_test_pred)
+    results = pd.DataFrame(grid_search.cv_results_)
+    results.sort_values("mean_test_r2", ascending=False, inplace=True)
+    best_run = results.iloc[0]
 
     print("SGDRegressor Results:")
     print(f"Best parameters: {grid_search.best_params_}")
+    best_sgd = grid_search.best_estimator_
+    y_train_pred = best_sgd.predict(X_train_scaled)
+    train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
     print(f"Training RMSE: {train_rmse:.4f}")
-    print(f"Test RMSE: {test_rmse:.4f}")
+    train_r2 = r2_score(y_train, y_train_pred)
     print(f"Training R2: {train_r2:.4f}")
+
+    y_test_pred = grid_search.predict(X_test_scaled)
+    test_rmse = np.sqrt(mean_squared_error(y_test, y_test_pred))
+    print(f"Test RMSE: {test_rmse:.4f}")
+    test_r2 = r2_score(y_test, y_test_pred)
     print(f"Test R2: {test_r2:.4f}")
 
-    results = pd.DataFrame(grid_search.cv_results_)
-    results.sort_values("mean_test_score", ascending=False, inplace=True)
     results.to_excel("sgd_results.xlsx")
 
 
@@ -200,7 +210,7 @@ def ols_model(X, y):
     train_r2 = r2_score(y_train, y_train_pred)
     test_r2 = r2_score(y_test, y_test_pred)
 
-    print("OLS Results:")
+    print("\nOLS Results:")
     print(f"Training RMSE: {train_rmse:.4f}")
     print(f"Test RMSE: {test_rmse:.4f}")
     print(f"Training R2: {train_r2:.4f}")
