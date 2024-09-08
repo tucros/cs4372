@@ -9,7 +9,12 @@ import seaborn as sns
 import statsmodels.api as sm
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import SGDRegressor
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import (
+    explained_variance_score,
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+)
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.outliers_influence import variance_inflation_factor
@@ -137,7 +142,7 @@ def feature_eng(df, use_ols=True):
     return df
 
 
-def sgd_model(X_train, X_test, y_train, y_test):
+def sgd_model(X_train, y_train, X_test, y_test):
     X_train_scaled = X_train.copy()
     scaler = StandardScaler()
     numeric_columns = ["horsepower", "weight", "acceleration"]
@@ -180,10 +185,10 @@ def sgd_model(X_train, X_test, y_train, y_test):
 
     results = pd.DataFrame(grid_search.cv_results_)
     results.sort_values("mean_test_r2", ascending=False, inplace=True)
-    best_run = results.iloc[0]
 
     print("SGDRegressor Results:")
     print(f"Best parameters: {grid_search.best_params_}")
+
     best_sgd = grid_search.best_estimator_
     y_train_pred = best_sgd.predict(X_train_scaled)
     train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
@@ -197,7 +202,40 @@ def sgd_model(X_train, X_test, y_train, y_test):
     test_r2 = r2_score(y_test, y_test_pred)
     print(f"Test R2: {test_r2:.4f}")
 
+    # print coefficient values and names of features
+    print("\nCoefficients:")
+    for i, coef in enumerate(best_sgd.coef_):
+        print(f"{X_train_scaled.columns[i]}: {coef:.4f}")
+
+    train_mae = mean_absolute_error(y_train, y_train_pred)
+    train_ev = explained_variance_score(y_train, y_train_pred)
+    print(f"Train MAE: {train_mae:.4f}")
+    print(f"Train EV: {train_ev:.4f}")
+
+    sgd = SGDRegressor()
+    sgd.fit(X_train_scaled, y_train)
+    y_train_pred = sgd.predict(X_train_scaled)
+    y_test_pred = sgd.predict(X_test_scaled)
+    # pint r2 and rmse
+    train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
+    test_rmse = np.sqrt(mean_squared_error(y_test, y_test_pred))
+    train_r2 = r2_score(y_train, y_train_pred)
+    test_r2 = r2_score(y_test, y_test_pred)
+    print("\nSGD Results:")
+    print(f"Training RMSE: {train_rmse:.4f}")
+    print(f"Test RMSE: {test_rmse:.4f}")
+    print(f"Training R2: {train_r2:.4f}")
+    print(f"Test R2: {test_r2:.4f}")
+
     results.to_excel("sgd_results.xlsx")
+
+    # scatter plot of residuals
+    plt.figure(figsize=(12, 8))
+    plt.scatter(y_test_pred, y_test - y_test_pred)
+    plt.xlabel("Predicted")
+    plt.ylabel("Residual")
+    plt.title("Residuals")
+    plt.savefig("graphs/residuals.png")
 
 
 def ols_model(X, y):
@@ -236,5 +274,5 @@ if __name__ == "__main__":
         .pipe(split_data)
     )
 
-    sgd_model(X_train, X_test, y_train, y_test)
+    sgd_model(X_train, y_train, X_test, y_test)
     ols_model(X_train, y_train)
