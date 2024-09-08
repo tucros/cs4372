@@ -1,5 +1,6 @@
 import os
 import warnings
+import sys
 from itertools import chain, combinations
 
 import matplotlib.pyplot as plt
@@ -19,7 +20,9 @@ from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.preprocessing import StandardScaler
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 
-warnings.filterwarnings(action="ignore", category=ConvergenceWarning)
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+    os.environ["PYTHONWARNINGS"] = "ignore" # Also affect subprocesses
 
 columns = [
     "mpg",
@@ -130,6 +133,10 @@ def feature_eng(df, use_ols=True):
 
     X = df.drop("mpg", axis=1)
     y = df["mpg"]
+
+    model = sm.OLS(y, X).fit()
+    print("\nOLS Summary with all features:")
+    print(model.summary())
 
     if use_ols:
         ols_run_all(X, y)
