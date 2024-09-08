@@ -120,6 +120,9 @@ def ols_run_all(X, y):
 
 
 def feature_eng(df, use_ols=True):
+    print("\nCorrelation Matrix: ")
+    print(df.corr())
+
     X = df.drop("mpg", axis=1)
     y = df["mpg"]
 
