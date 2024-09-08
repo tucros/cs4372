@@ -1,4 +1,6 @@
+import os
 import warnings
+from itertools import chain, combinations
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,6 +12,7 @@ from sklearn.linear_model import SGDRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.preprocessing import StandardScaler
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 warnings.filterwarnings(action="ignore", category=ConvergenceWarning)
 
@@ -41,58 +44,37 @@ def load_data():
 
 
 def generate_exploration_plots(df):
-    plt.figure(figsize=(20, 20))
+    if not os.path.exists("graphs"):
+        os.mkdir("graphs")
 
     # Pairplot numerical columns
+    plt.figure(figsize=(12, 12))
     sns.pairplot(df[numerical_columns], diag_kind="kde")
     plt.suptitle("Pairplot of Numerical Variables", y=1.02)
-    plt.show()
+    # save to file in graphs folder
+    plt.savefig("graphs/pairplot.png")
 
-    # Boxplots for each numerical variable
-    plt.figure(figsize=(15, 10))
-    for idx, column in enumerate(numerical_columns, 1):
-        print(f"Boxplot of {column}")
-        plt.subplot(3, 3, idx)
-        sns.boxplot(x=df[column])
-        plt.title(f"Boxplot of {column}")
-    plt.tight_layout()
-    plt.show()
-
-    # Heatmap of correlation matrix
-    plt.figure(figsize=(12, 10))
-    sns.heatmap(df[numerical_columns].corr(), annot=True, cmap="coolwarm")
-    plt.title("Correlation Heatmap")
-    plt.show()
-
-    # barplot of cyclinders
     plt.figure(figsize=(12, 8))
-    sns.countplot(x="cylinders", data=df)
-    plt.title("Count of Cylinders")
-    plt.show()
+    sns.stripplot(x="cylinders", y="mpg", data=df, jitter=0.3)
+    plt.title("MPG vs Cylinders")
+    plt.savefig("graphs/mpg_vs_cylinders.png")
 
     # barplot of origin
     plt.figure(figsize=(12, 8))
-    sns.countplot(x="origin", data=df)
-    plt.title("Count of Origin")
-    plt.show()
+    sns.stripplot(x="origin", y="mpg", data=df, jitter=0.3)
+    plt.title("MPG vs Origin")
+    plt.savefig("graphs/mpg_vs_origin.png")
 
-    # Scatterplot of MPG vs Horsepower, with color based on cylinders
-    plt.figure(figsize=(12, 8))
-    sns.scatterplot(x="weight", y="mpg", hue="origin", data=df)
-    plt.title("MPG vs Weight, colored by Origin")
-    plt.show()
-
-    # Distribution of MPG
-    plt.figure(figsize=(12, 6))
-    sns.histplot(df["mpg"], kde=True)
-    plt.title("Distribution of MPG")
-    plt.show()
+    return df
 
 
 def clean_data(df):
-    print(f"Nulls: {df.isnull().sum()}")
-    print(f"\nNaN values: {df.isna().sum()}")
-    print("\n?s:", df.isin(["?"]).sum())
+    print("Nulls:")
+    print(df.isnull().sum())
+    print("\nNaN values:")
+    print(df.isna().sum())
+    print("\n?s:")
+    print(df.isin(["?"]).sum())
 
     df = df.mask(df == "?").dropna()
 
@@ -107,27 +89,46 @@ def clean_data(df):
     return df
 
 
-def feature_analysis(df):
-    print("\nData Types")
-    print(df.dtypes)
+def vifs(X):
+    print("\nVIFs:")
+    vif = [variance_inflation_factor(X, i) for i in range(len(X.columns))]
+    for i, col in enumerate(X.columns):
+        print(f"{col}: {vif[i]:.2f}")
 
-    print("\nCorrelation")
-    print(df.corr())
 
+def ols_run_all(X, y):
+    columns = list(X.columns)
+    combination_iter = chain.from_iterable(
+        combinations(columns, i) for i in range(len(columns) + 1)
+    )
+
+    all_runs = []
+    for combination in combination_iter:
+        features = list(combination)
+        if len(combination) > 0:
+            model = sm.OLS(y, X[features]).fit()
+            all_runs.append((features, model.rsquared_adj))
+
+    all_runs.sort(key=lambda x: x[1], reverse=True)
+
+    print("\nTop 3 OLS Results:")
+    for i in range(3):
+        print(f"  Features: {all_runs[i][0]}")
+        print(f"  Adj R2: {all_runs[i][1]:.4f}\n")
+
+
+def feature_eng(df, use_ols=True):
     X = df.drop("mpg", axis=1)
     y = df["mpg"]
-    model = sm.OLS(y, X).fit()
-    print("\nModel Summary")
-    print(model.summary())
 
+    if use_ols:
+        ols_run_all(X, y)
+    vifs(X)
 
-def feature_eng(df):
-    feature_analysis(df)
+    df = df.drop(["displacement", "bias"], axis=1)
 
-    # Drop columns with high correlation and/or p-value
-    df = df.drop(["displacement"], axis=1)
-
-    feature_analysis(df)
+    X = df.drop("mpg", axis=1)
+    vifs(X)
     return df
 
 
@@ -153,15 +154,14 @@ def sgd_model(X_train, X_test, y_train, y_test):
     param_grid = {
         "alpha": [0.0001, 0.001, 0.01, 0.1],
         "learning_rate": ["constant", "optimal", "invscaling", "adaptive"],
-        # "eta0": [0.001, 0.005, 0.01, 0.05, 0.1],
+        "eta0": [0.001, 0.005, 0.01, 0.05, 0.1],
         "loss": ["squared_error", "huber", "epsilon_insensitive"],
-        # "penalty": ["l2", "l1", "elasticnet"],
+        "penalty": ["l2", "l1", "elasticnet"],
         "max_iter": [1000, 2000, 5000],
         "tol": [1e-3, 1e-4, 1e-5],
     }
-    print(f"Number of combinations: {np.prod([len(v) for v in param_grid.values()])}")
-
-    print("\nRunning GridSearchCV...")
+    print(f"\nNumber of combinations: {np.prod([len(v) for v in param_grid.values()])}")
+    print("Running GridSearchCV...")
     sgd = SGDRegressor()
     grid_search = GridSearchCV(sgd, param_grid, return_train_score=True)  # , verbose=2)
     grid_search.fit(X_train_scaled, y_train)
@@ -207,22 +207,21 @@ def ols_model(X, y):
     print(f"Test R2: {test_r2:.4f}")
 
 
-if __name__ == "__main__":
-    df = load_data()
-
-    df = clean_data(df)
-    generate_exploration_plots(df)
-    df = feature_eng(df)
-
+def split_data(df):
     # Split data into training and test sets
     X = df.drop("mpg", axis=1)
     y = df["mpg"]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    return train_test_split(X, y, test_size=0.2)
 
-    # Train and evaluate models
+
+if __name__ == "__main__":
+    X_train, X_test, y_train, y_test = (
+        load_data()
+        .pipe(clean_data)
+        .pipe(generate_exploration_plots)
+        .pipe(feature_eng)
+        .pipe(split_data)
+    )
+
     sgd_model(X_train, X_test, y_train, y_test)
-
-    # X = pd.concat([X_train, X_test])
-    # y = pd.concat([y_train, y_test])
-    # ols_model(X, y)
     ols_model(X_train, y_train)
