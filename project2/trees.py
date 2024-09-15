@@ -101,14 +101,16 @@ def feature_engineer(data):
         logging.info(f"Removing {remove_cols}")
         features.drop(remove_cols, axis=1, inplace=True)
 
+    # NOTE: Convert target to binary representing high quality wines
+    data["highquality"] = data["quality"].apply(lambda x: 1 if x >= 7 else 0)
+
     # NOTE: No need to scale since we are using tree-based models
     return data
 
 
 def split(data):
-    X = data.drop("quality", axis=1)
-    # NOTE: Convert target to binary representing high quality wines
-    y = data["quality"].apply(lambda x: 1 if x >= 7 else 0)
+    X = data.drop(["quality", "highquality"], axis=1)
+    y = data["highquality"]
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     return X_train, y_train, X_test, y_test
