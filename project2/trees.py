@@ -4,10 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import sklearn.datasets
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
-import ucimlrepo
+from scipy.stats import pearsonr
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.tree import DecisionTreeClassifier
@@ -19,18 +16,31 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
+# columns = [
+#     "fixed acidity", "volatile acidity", "citric acid", "residual sugar",
+#     "chlorides", "free sulfur dioxide", "total sulfur dioxide", "density",
+#     "pH", "sulphates", "alcohol", "quality"
+# ]
+
 
 def load_data():
     logging.info("Loading data")
     wine_df = pd.read_csv(
-        "https://github.com/tucros/school_datasets/blob/main/winequality-white.csv?raw=true"
+        "https://github.com/tucros/school_datasets/blob/main/winequality-white.csv?raw=true",
+        sep=";",
     )
+    wine_df["quality"] = wine_df["quality"].astype("category")
     return wine_df
 
 
 def preprocess(data):
     logging.info("\nPreprocessing.....")
     logging.info(f"{data.shape} Rows and Columns")
+
+    logging.info("\nFrame info")
+    logging.info(data.info())
+
+    logging.info("\nFrame description")
     logging.info(data.describe())
 
     null_rows = data[data.isnull().any(axis=1)]
@@ -47,51 +57,58 @@ def preprocess(data):
 
 
 def explore(data):
-    plt.figure(figsize=(10, 6))
-    sns.pairplot(data.drop("Region", axis=1))
-    plt.savefig("graphs/q1_pairplot.png")
+    # plt.figure(figsize=(20, 20))
+    # sns.pairplot(data)
+    # plt.savefig("graphs/pairplot.png")
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(15, 15))
     sns.heatmap(data.corr(), annot=True, cmap="coolwarm", vmin=-1, vmax=1)
     plt.title("Correlation Heatmap")
-    plt.savefig("graphs/q1_correlation_heatmap.png")
+    plt.savefig("graphs/correlation_heatmap.png")
 
-    for feature in data.columns[:-1]:
-        plt.figure(figsize=(10, 6))
-        sns.stripplot(x="Region", y=feature, data=data, jitter=True)
-        plt.title(f"{feature} by Region")
-        plt.savefig(f"graphs/q1_{feature}_by_region.png")
+    plt.figure(figsize=(10, 10))
+    sns.histplot(data["quality"], bins=10)
+    plt.title("Quality Histogram")
+    plt.savefig("graphs/quality_histogram.png")
+
+    plt.figure(figsize=(20, 20))
+    for i, column in enumerate(data.columns):
+        if column != "quality":
+            plt.subplot(4, 3, i + 1)
+            sns.stripplot(x="quality", y=column, data=data, jitter=True)
+            plt.title(f"{column} vs Quality")
+    plt.tight_layout()
+    plt.savefig("graphs/features_vs_quality_stripplot.png")
 
     return data
 
 
 def feature_engineer(data):
-    full_model = smf.ols(
-        "Quality ~ Clarity + Aroma + Body + Flavor + Oakiness + C(Region)",
-        data=data,
-    ).fit()
-    logging.info("\nFull Model Summary:")
-    logging.info(full_model.summary().tables[1])
+    features = data.drop("quality", axis=1)
+    target = data["quality"]
 
-    model = smf.ols("Quality ~ Oakiness + Flavor  + C(Region)", data=data).fit()
-    logging.info("\nReduced Model Summary:")
-    logging.info(model.summary().tables[1])
+    # Determine feature correlation with quality
+    alpha = 0.05
+    remove_cols = []
+    for column in features.columns:
+        _, pval = pearsonr(features[column], target)
+        logging.debug(f"{column} vs quality pval: {pval}")
+        if pval > alpha:
+            remove_cols.append(column)
 
-    anova = sm.stats.anova_lm(full_model, model)
-    logging.info("\nANOVA:")
-    logging.info(anova)
-
-    data.drop(["Clarity", "Aroma", "Body"], axis=1, inplace=True)
+    logging.info(f"Removing {len(remove_cols)} uncorrelated columns")
+    if len(remove_cols) > 0:
+        logging.info(f"Removing {remove_cols}")
+        features.drop(remove_cols, axis=1, inplace=True)
 
     # NOTE: No need to scale since we are using tree-based models
-    # NOTE: No need to encode categorical variables since we are using tree-based models
     return data
 
 
 def split(data):
-    X = data.drop("Quality", axis=1)
+    X = data.drop("quality", axis=1)
     # NOTE: Convert target to binary representing high quality wines
-    y = data["Quality"].apply(lambda x: 1 if x >= 7 else 0)
+    y = data["quality"].apply(lambda x: 1 if x >= 7 else 0)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     return X_train, y_train, X_test, y_test
@@ -157,12 +174,12 @@ CLASSIFIERS = [
 ]
 
 if __name__ == "__main__":
+    if not os.path.exists("graphs"):
+        os.makedirs("graphs")
+
     X_train, y_train, X_test, y_test = (
         load_data().pipe(preprocess).pipe(explore).pipe(feature_engineer).pipe(split)
     )
-
-    if not os.path.exists("graphs"):
-        os.makedirs("graphs")
 
     for model, params, viz_fn in CLASSIFIERS:
         logging.info(f"\nTraining {model.__class__.__name__}")
