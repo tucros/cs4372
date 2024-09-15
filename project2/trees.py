@@ -2,6 +2,7 @@ import logging
 import os
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
 import sklearn.datasets
 import statsmodels.api as sm
@@ -21,7 +22,9 @@ logging.basicConfig(
 
 def load_data():
     logging.info("Loading data")
-
+    wine_df = pd.read_csv(
+        "https://github.com/tucros/cs4372/blob/021ee4fb2cf21cb6a6320de17009d7a8366df9a9/project2/winequality-white.csv?raw=true"
+    )
     return wine_df
 
 
