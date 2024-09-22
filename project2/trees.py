@@ -4,6 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import graphviz
 from scipy.stats import pearsonr
 from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from sklearn import tree
@@ -12,7 +13,6 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 from sklearn.metrics import PrecisionRecallDisplay
-import graphviz
 
 logging.basicConfig(
     level=logging.INFO,
@@ -122,6 +122,17 @@ def split(data):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     return X_train, y_train, X_test, y_test
 
+def plot_class_balance(y, dataset_name):
+    class_counts = y.value_counts(normalize=True) * 100
+    plt.figure(figsize=(10, 7))
+    sns.barplot(x=class_counts.index, y=class_counts.values)
+    plt.xlabel('Class')
+    plt.ylabel('Percentage')
+    plt.title('Class Balance')
+    for i, value in enumerate(class_counts.values):
+        plt.text(i, value + 1, f'{value:.2f}%', ha='center')
+    plt.savefig(f"graphs/class_balance_{dataset_name}.png")
+    plt.close()
 
 def visualize_decision_tree(clf, data):
     # TODO: Implement
@@ -131,8 +142,7 @@ def visualize_decision_tree(clf, data):
                      filled=True, rounded=True,
                      special_characters=True)
     graph = graphviz.Source(dot_data)
-    graph.format = 'png'
-    graph.render("graphs/decision_tree")
+    graph.render("graphs/decision_tree", format='png')
     pass
 
 
@@ -144,8 +154,7 @@ def visualize_random_forest(clf, data):
                         filled=True, rounded=True,
                         special_characters=True)
     graph = graphviz.Source(dot_data)
-    graph.format = 'png'
-    graph.render("graphs/random_forest")
+    graph.render("graphs/random_forest", format='png')
     pass
 
 
@@ -177,6 +186,7 @@ CLASSIFIERS = [
             "max_depth": [3, 5, 7],
             "min_samples_split": [2, 5, 10],
             "min_samples_leaf": [1, 2, 4],
+            "max_features": ["auto", "sqrt", "log2"],
         },
         visualize_random_forest,
     ),
@@ -193,6 +203,7 @@ CLASSIFIERS = [
         {
             "n_estimators": [50, 100, 200],
             "learning_rate": [0.1, 0.5, 1],
+            "max_depth": [3, 5, 7],
         },
         visualize_xgboost,
     ),
@@ -206,6 +217,10 @@ if __name__ == "__main__":
         load_data().pipe(preprocess).pipe(explore).pipe(feature_engineer).pipe(split)
     )
 
+
+    # plot class balance for test set
+    plot_class_balance(y_test, 'y_test')
+
     for model, params, viz_fn in CLASSIFIERS:
         logging.info(f"\nTraining {model.__class__.__name__}")
         clf = GridSearchCV(model, params, cv=5, n_jobs=-1, scoring="accuracy")
@@ -215,20 +230,21 @@ if __name__ == "__main__":
         logging.info(f"Best parameters: {clf.best_params_}")
         logging.info(f"Best Training Accuracy for {model.__class__.__name__}: {clf.best_score_}")
 
-        # Classifcation report
-        # precision, recall and f1 score
+        ### predict and evaluate on test set
         y_pred = clf.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
         logging.info(f"Testing Accuracy: {accuracy}")
 
+        ### precision, recall and f1 score
         precision, recall, f1_score, _ = precision_recall_fscore_support(y_test, y_pred, average='binary')
         logging.info(f"Precision: {precision}")
         logging.info(f"Recall: {recall}")
         logging.info(f"F1 Score: {f1_score}")
 
-        logging.info(f"Classification Report: \n{classification_report(y_test, y_pred)}")
+        ### Classifcation report
+        logging.info(f"Classification Report: \n {model.__class__.__name__}\n{classification_report(y_test, y_pred)}")
 
-        # confusion matrix and save plot to graphs folder
+        ### confusion matrix and save plot to graphs folder
         cm = confusion_matrix(y_test, y_pred)
         plt.figure(figsize=(10, 7))
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
@@ -238,12 +254,15 @@ if __name__ == "__main__":
         plt.savefig(f"graphs/confusion_matrix_{model.__class__.__name__}.png")
         plt.close()
 
-        # ROC curve and save plot to graphs folder
+        ### ROC curve and save plot to graphs folder
+        # calculate roc curve and auc
         fpr, tpr, _ = roc_curve(y_test, clf.predict_proba(X_test)[:, 1])
-        plt.figure(figsize=(10, 7))
         roc_auc = auc(fpr, tpr)
+
+        # plot roc curve for the model
+        plt.figure(figsize=(10, 7))
         plt.plot(fpr, tpr, marker='.', label=f'AUC = {roc_auc:.2f}')
-        plt.plot([0, 1], [0, 1], linestyle='--', color='r', label=f'AUC = 0.5')
+        plt.plot([0, 1], [0, 1], linestyle='--', color='r', label='AUC = 0.5')
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
         plt.title(f'ROC Curve for {model.__class__.__name__}')
@@ -251,13 +270,13 @@ if __name__ == "__main__":
         plt.savefig(f"graphs/roc_curve_{model.__class__.__name__}.png")
         plt.close()
 
-        # Precision-Recall curve and save plot to graphs folder
-        class_counts = y_test.value_counts(normalize=True) * 100
-        logging.info(f"Percentage of each class in y_test:\n{class_counts}")
+        ### Precision-Recall curve and save plot to graphs folder
 
+        # plot precision-recall curve for the model
         precision_recall_display = PrecisionRecallDisplay.from_estimator(clf, X_test, y_test)
         precision_recall_display.plot()
-        plt.axhline(y=class_counts[1] / 100, color='r', linestyle='--', label='Baseline Classifier')
+        class_counts = y_test.value_counts(normalize=True)
+        plt.axhline(y=class_counts[1], color='r', linestyle='--', label=f'Baseline Classifier = {class_counts[1]:.2f}')
         plt.legend(loc='lower left')
         plt.title(f'Precision-Recall curve for {model.__class__.__name__}')
         plt.savefig(f"graphs/precision_recall_curve_{model.__class__.__name__}.png")
