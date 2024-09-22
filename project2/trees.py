@@ -186,7 +186,6 @@ CLASSIFIERS = [
             "max_depth": [3, 5, 7],
             "min_samples_split": [2, 5, 10],
             "min_samples_leaf": [1, 2, 4],
-            "max_features": ["auto", "sqrt", "log2"],
         },
         visualize_random_forest,
     ),
