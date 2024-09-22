@@ -12,9 +12,14 @@ Next, install all the program dependencies.
 
 `pip install -r requirements.txt`
 
+Also, Graphviz needs to be installed.
+For Windows, download an executable install package from https://graphviz.org/download/. When installing, make sure to add Graphviz to the System PATH (all users).
+
+For Linux (Debian/Ubuntu), use `sudo apt install graphviz`
+For MacOS, use `brew install graphviz`
 
 ## Running the program
-
+The program is a Juypter notebook.
 
 ## Cleaning up
 To clean up, deactivate the virutal environment and delete its folder.
